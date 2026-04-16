@@ -1,0 +1,82 @@
+============================================================================
+TÀI LIỆU HƯỚNG DẪN VẬN HÀNH DATABASE OBJECTS
+Hệ thống: Quản lý Phòng khám đa khoa (PostgreSQL)
+Ngày cập nhật: 16/04/2026
+============================================================================
+
+I. STORED PROCEDURE (Xử lý nghiệp vụ phức tạp)
+----------------------------------------------------------------------------
+Tên: sp_TaoHoaDonThanhToan(p_MaLichHen VARCHAR)
+Mục đích: Tự động tổng hợp tiền dịch vụ, tiền vật tư và tạo hóa đơn thanh toán.
+Quy tắc: Tự động phụ thu 20% nếu lịch hẹn bắt đầu sau 22h đêm.
+
+Cách dùng (Gọi lẻ):
+   CALL sp_TaoHoaDonThanhToan('LH001');
+
+Cách dùng (Chạy hàng loạt cho 300 bản ghi):
+   DO $$
+   BEGIN
+       FOR i IN 1..300 LOOP
+           BEGIN
+               CALL sp_TaoHoaDonThanhToan('LH' || LPAD(i::text, 3, '0'));
+           EXCEPTION WHEN OTHERS THEN CONTINUE;
+           END;
+       END LOOP;
+   END $$;
+
+
+II. NHÓM FUNCTION VỀ NHÂN SỰ & BỆNH NHÂN
+----------------------------------------------------------------------------
+1. fn_tinhtuoi(p_ngaysinh DATE)
+   - Mục đích: Tính tuổi hiện tại của một người.
+   - Ví dụ: SELECT HoTen, fn_tinhtuoi(NgaySinh) FROM BENH_NHAN;
+
+2. fn_phanloainhomtuoi(p_ngaysinh DATE)
+   - Mục đích: Phân loại nhóm đối tượng (Trẻ em, Người trưởng thành, Cao tuổi).
+   - Ví dụ: SELECT HoTen, fn_phanloainhomtuoi(NgaySinh) FROM BENH_NHAN;
+
+3. fn_kiemtranhanvienranh(p_manv, p_batdau, p_ketthuc)
+   - Mục đích: Kiểm tra nhân viên có bị trùng lịch khác trong khung giờ này không.
+   - Ví dụ: SELECT fn_kiemtranhanvienranh('NV001', '2026-04-16 08:00', '2026-04-16 10:00');
+
+
+III. NHÓM FUNCTION VỀ CHUYÊN MÔN Y TẾ
+----------------------------------------------------------------------------
+1. fn_mucdokhancap(p_nhietdo, p_nhiptim)
+   - Mục đích: Dựa trên sinh hiệu để đưa ra mức độ ưu tiên (Khẩn cấp/Bình thường).
+   - Ví dụ: SELECT MaKetQua, fn_mucdokhancap(NhietDo, NhipTim) FROM KET_QUA_KHAM;
+
+2. fn_tinhthoigiankham(p_batdau, p_ketthuc)
+   - Mục đích: Tính tổng thời gian thực hiện ca khám (đơn vị: phút).
+   - Ví dụ: SELECT MaLichHen, fn_tinhthoigiankham(ThoiGianBatDau, ThoiGianKetThuc) FROM LICH_HEN;
+
+
+IV. NHÓM FUNCTION VỀ TÀI CHÍNH
+----------------------------------------------------------------------------
+1. fn_doanhthungay(p_ngay DATE)
+   - Mục đích: Tính tổng tiền thu được trong 1 ngày cụ thể.
+   - Ví dụ: SELECT fn_doanhthungay('2026-04-16');
+
+2. fn_tinhgiasauthue(p_sotien, p_thuesuat)
+   - Mục đích: Tính giá trị sau thuế (mặc định thuế là 8% = 0.08).
+   - Ví dụ: SELECT fn_tinhgiasauthue(1000000); -- Kết quả: 1.080.000
+
+3. fn_formatvnd(p_sotien)
+   - Mục đích: Định dạng tiền thành chuỗi có dấu phân cách (VD: 1,500,000 VNĐ).
+   - Ví dụ: SELECT fn_formatvnd(fn_tinhgiasauthue(2000000));
+
+
+V. VÍ DỤ KẾT HỢP (LÀM BÁO CÁO TỔNG HỢP)
+----------------------------------------------------------------------------
+Truy vấn danh sách hóa đơn đã bao gồm thuế và định dạng đẹp:
+
+SELECT 
+    MaHoaDon,
+    fn_formatvnd(TongTienThanhToan) AS "Tiền gốc",
+    fn_formatvnd(fn_tinhgiasauthue(TongTienThanhToan)) AS "Tổng phải trả (VAT 8%)"
+FROM HOA_DON;
+
+============================================================================
+Ghi chú: Đảm bảo các thuộc tính bổ sung (DiemUyTin, SoLuongTon, NgayHetHan...)
+đã được cập nhật vào các bảng tương ứng để Function/Procedure chạy chính xác.
+============================================================================
