@@ -1,0 +1,66 @@
+----------------------------------------------------------------
+-- 1. View Danh sách Bác sĩ Uy tín (Trên 4.5 sao)
+-- Mục đích: Hiển thị trên App để bệnh nhân chọn bác sĩ tốt nhất.
+----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_BacSiUyTin AS
+SELECT 
+    MaNhanVien, 
+    HoTen, 
+    SoNamKinhNghiem, 
+    DiemUyTin,
+    TrangThai
+FROM NHAN_VIEN_Y_TE
+WHERE LoaiNhanSu = 'Bác sĩ' 
+  AND DiemUyTin >= 4.5
+ORDER BY DiemUyTin DESC;
+
+----------------------------------------------------------------
+-- 2. View Thống kê Doanh thu theo từng Dịch vụ
+-- Mục đích: Phục vụ biểu đồ Dashboard cho Admin.
+----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_DoanhThuTheoDichVu AS
+SELECT 
+    dv.MaDichVu, 
+    dv.TenDichVu, 
+    COUNT(hd.MaHoaDon) AS SoLuotSuDung,
+    SUM(hd.TongTienDichVu) AS DoanhThuDichVu,
+    SUM(hd.TongThanhToan) AS TongDoanhThuThucTe
+FROM DICH_VU dv
+LEFT JOIN LICH_HEN lh ON dv.MaDichVu = lh.MaDichVu
+LEFT JOIN HOA_DON hd ON lh.MaLichHen = hd.MaLichHen
+GROUP BY dv.MaDichVu, dv.TenDichVu;
+
+----------------------------------------------------------------
+-- 3. View Lịch sử khám chi tiết của Bệnh nhân
+-- Mục đích: Hiển thị trong mục "Lịch sử của tôi" trên App.
+----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_LichSuKhamBenhNhan AS
+SELECT 
+    bn.MaBenhNhan,
+    bn.HoTen AS TenBenhNhan,
+    lh.ThoiGianBatDau,
+    dv.TenDichVu,
+    nv.HoTen AS BacSiThucHien,
+    kq.ChanDoanSoBo,
+    kq.YLenh,
+    hd.TrangThaiThanhToan
+FROM BENH_NHAN bn
+JOIN LICH_HEN lh ON bn.MaBenhNhan = lh.MaBenhNhan
+JOIN DICH_VU dv ON lh.MaDichVu = dv.MaDichVu
+JOIN NHAN_VIEN_Y_TE nv ON lh.MaNhanVien = nv.MaNhanVien
+LEFT JOIN KET_QUA_KHAM kq ON lh.MaLichHen = kq.MaLichHen
+LEFT JOIN HOA_DON hd ON lh.MaLichHen = hd.MaLichHen
+ORDER BY lh.ThoiGianBatDau DESC;
+
+----------------------------------------------------------------
+-- 4. View Cảnh báo Vật tư sắp hết kho
+-- Mục đích: Thông báo cho Admin nhập hàng.
+----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_CanhBaoVatTu AS
+SELECT 
+    MaVatTu, 
+    TenVatTu, 
+    SoLuongTon,
+    'Sắp hết hàng' AS TinhTrang
+FROM VAT_TU_Y_TE
+WHERE SoLuongTon < 10; -- Ngưỡng cảnh báo tùy chọn
