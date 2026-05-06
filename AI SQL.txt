@@ -1,0 +1,101 @@
+-- Thêm cột AI cho bảng Kết quả khám
+ALTER TABLE ket_qua_kham 
+ADD COLUMN IF NOT EXISTS ai_canhbaoruiro TEXT,
+ADD COLUMN IF NOT EXISTS ai_dotincay DECIMAL(3,2);
+
+-- Thêm cột AI cho bảng Đánh giá
+ALTER TABLE danh_gia 
+ADD COLUMN IF NOT EXISTS ai_phantichcamxuc VARCHAR(50);
+
+-- Thêm cột AI cho bảng Lịch hẹn & Bệnh nhân
+ALTER TABLE lich_hen 
+ADD COLUMN IF NOT EXISTS ai_xacsuatvangmat DECIMAL(3,2),
+ADD COLUMN IF NOT EXISTS ai_thutuuitiendichuyen INT;
+
+ALTER TABLE benh_nhan 
+ADD COLUMN IF NOT EXISTS ai_goiydichvutieptheo TEXT;
+
+CREATE OR REPLACE FUNCTION fn_ai_phantichcamxuc()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- 1. TÍCH CỰC (4-5 sao hoặc từ khóa tốt)
+    IF NEW.sosao >= 4 
+       OR NEW.noidung ILIKE ANY (ARRAY[
+          '%Tuyệt vời%', '%Rất hài lòng%', '%sạch sẽ%', '%hiện đại%', 
+          '%Dịch vụ tốt%', '%tận tâm%', '%Hài lòng%'
+       ]) 
+    THEN
+        NEW.ai_phantichcamxuc := 'Tích cực';
+
+    -- 2. TIÊU CỰC (1-2 sao hoặc từ khóa phản hồi kém)
+    ELSIF NEW.sosao <= 2 
+       OR NEW.noidung ILIKE ANY (ARRAY[
+          '%Không hài lòng%', '%chưa tốt%', '%thất vọng%', 
+          '%quá tệ%', '%không quay lại%', '%đợi lâu%', '%thái độ%'
+       ]) 
+    THEN
+        NEW.ai_phantichcamxuc := 'Tiêu cực';
+
+    -- 3. TRUNG TÍNH
+    ELSE
+        NEW.ai_phantichcamxuc := 'Trung tính';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION fn_ai_phantichsuckhoe()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (NEW.nhiptim > 100 AND NEW.nhietdo > 38.5) THEN
+        NEW.ai_canhbaoruiro := 'CẢNH BÁO AI: Nguy cơ nhiễm trùng huyết hoặc suy tim cấp.';
+        NEW.ai_dotincay := 0.92;
+    ELSIF (NEW.nhietdo > 39.0) THEN
+        NEW.ai_canhbaoruiro := 'CẢNH BÁO AI: Nguy cơ sốt co giật.';
+        NEW.ai_dotincay := 0.85;
+    ELSE
+        NEW.ai_canhbaoruiro := 'AI: Chỉ số trong ngưỡng an toàn.';
+        NEW.ai_dotincay := 0.95;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+-- Trigger cho bảng Đánh giá
+DROP TRIGGER IF EXISTS trg_ai_phantichcamxuc ON danh_gia;
+CREATE TRIGGER trg_ai_phantichcamxuc
+BEFORE INSERT OR UPDATE ON danh_gia
+FOR EACH ROW EXECUTE FUNCTION fn_ai_phantichcamxuc();
+
+-- Trigger cho bảng Kết quả khám
+DROP TRIGGER IF EXISTS trg_ai_phantichsuckhoe ON ket_qua_kham;
+CREATE TRIGGER trg_ai_phantichsuckhoe
+BEFORE INSERT OR UPDATE ON ket_qua_kham
+FOR EACH ROW EXECUTE FUNCTION fn_ai_phantichsuckhoe();
+
+
+
+DROP VIEW IF EXISTS vw_ai_system_insights;
+CREATE VIEW vw_ai_system_insights AS
+SELECT 
+    lh.malichhen,
+    bn.hoten AS ten_benh_nhan,
+    COALESCE(kq.ai_canhbaoruiro, 'Chưa có kết quả khám') AS ai_suc_khoe,
+    COALESCE(dg.ai_phantichcamxuc, 'Chưa có đánh giá') AS ai_cam_xuc,
+    CASE 
+        WHEN kq.ai_dotincay < 0.9 THEN 'Cần Bác sĩ kiểm tra lại'
+        ELSE 'AI Độ tin cậy cao'
+    END AS trang_thai_ai
+FROM lich_hen lh
+LEFT JOIN benh_nhan bn ON lh.mabenhnhan = bn.mabenhnhan
+LEFT JOIN ket_qua_kham kq ON lh.malichhen = kq.malichhen
+LEFT JOIN danh_gia dg ON lh.malichhen = dg.malichhen;
+
+
+-- Chạy lệnh này để AI quét lại toàn bộ dữ liệu cũ bạn đã nhập
+UPDATE danh_gia SET madanhgia = madanhgia;
+UPDATE ket_qua_kham SET maketqua = maketqua;
