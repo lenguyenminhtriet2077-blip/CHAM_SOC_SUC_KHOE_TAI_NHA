@@ -118,6 +118,8 @@ CREATE TABLE KET_QUA_KHAM (
     NhietDo DECIMAL(4,1),
     YLenh TEXT,
     GhiChu TEXT,
+	ai_canhbaoruiro text,
+    ai_dotincay numeric(3,2),
     -- Ràng buộc
     CONSTRAINT chk_kq_nhietdo CHECK (NhietDo BETWEEN 34 AND 42),      -- Quy tắc 9: Giới hạn sinh học
     CONSTRAINT chk_kq_nhiptim CHECK (NhipTim > 0)
