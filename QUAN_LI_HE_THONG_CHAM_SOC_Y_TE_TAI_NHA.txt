@@ -98,6 +98,8 @@ CREATE TABLE LICH_HEN (
     ThoiGianKetThuc TIMESTAMP,
     DiaChiThucHien VARCHAR(255),
     TrangThai VARCHAR(50) DEFAULT 'Chờ',
+ 	ai_xacsuatvangmat numeric(3,2),
+    ai_thutuuutiendichuyen integer,
     -- Ràng buộc
     -- Quy tắc 5: RESTRICT chặn xóa bệnh nhân nếu đã có lịch hẹn
     CONSTRAINT fk_lh_benhnhan FOREIGN KEY (MaBenhNhan) REFERENCES BENH_NHAN(MaBenhNhan) ON DELETE RESTRICT,
