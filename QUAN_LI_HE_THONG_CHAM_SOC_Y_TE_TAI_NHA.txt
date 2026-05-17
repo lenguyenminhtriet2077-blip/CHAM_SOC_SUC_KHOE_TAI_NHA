@@ -195,117 +195,7 @@ CREATE TABLE ADMIN (
     CapDo VARCHAR(50) DEFAULT 'Staff'
 );
 
-
-
---Trigger: Trừ điểm uy tín nhân viên khi hủy lịch hẹn 
-CREATE OR REPLACE FUNCTION public.fn_canhcaonhanvienhuylich()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
-AS $BODY$
-DECLARE
-    v_ThoiGianConLai INTERVAL;
-BEGIN
-    -- 1. Chỉ xử lý nếu trạng thái mới bị đổi thành 'Đã hủy'
-    IF NEW.TrangThai = 'Đã hủy' AND OLD.TrangThai != 'Đã hủy' THEN
-        
-        -- 2. Tính xem còn bao nhiêu phút nữa thì đến giờ hẹn
-        -- Lấy (Giờ bắt đầu khám) trừ đi (Giờ hiện tại lúc bấm hủy)
-        v_ThoiGianConLai := NEW.ThoiGianBatDau - CURRENT_TIMESTAMP;
-
-        -- 3. Nếu thời gian còn lại ít hơn 2 tiếng (2 hours)
-        IF v_ThoiGianConLai < INTERVAL '2 hours' THEN
-            
-            -- 4. Đánh dấu cảnh cáo vào hồ sơ nhân viên
-            -- Ở đây mình sẽ giả sử bạn ghi chú vào cột 'GhiChu' hoặc giảm 'DiemUyTin'
-            UPDATE NHAN_VIEN_Y_TE
-            SET DiemUyTin = DiemUyTin - 0.5 -- Trừ 0.5 điểm uy tín vì hủy gấp
-            WHERE MaNhanVien = NEW.MaNhanVien;
-            
-            -- Thông báo cho người dùng biết
-            RAISE NOTICE 'Nhân viên bị trừ điểm uy tín do hủy lịch sát giờ (dưới 2 tiếng).';
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$BODY$;
-
---Trigger: Không thể sửa kết quả khám sau 24h.
-
-CREATE OR REPLACE FUNCTION public.fn_khoaketquakham()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
-AS $BODY$
-DECLARE
-    v_ThoiGianHoanThanh TIMESTAMP;
-BEGIN
-    SELECT ThoiGianKetThuc INTO v_ThoiGianHoanThanh 
-    FROM LICH_HEN WHERE MaLichHen = OLD.MaLichHen;
-
-    IF v_ThoiGianHoanThanh IS NOT NULL AND (CURRENT_TIMESTAMP - v_ThoiGianHoanThanh) > INTERVAL '24 hours' THEN
-        RAISE EXCEPTION 'Đã quá 24h kể từ khi hoàn thành, không thể sửa kết quả khám';
-    END IF;
-    RETURN NEW;
-END;
-$BODY$;
-
---Trigger: Loại nhân sự 'Hộ Sinh' chỉ được phép ở Khoa Sản Phụ.
-
-CREATE OR REPLACE FUNCTION public.fn_kiemtrahosinhkhoasan()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
-AS $BODY$
-DECLARE
-    v_LoaiNhanSu VARCHAR(50);
-    v_TenChuyenKhoa VARCHAR(100);
-BEGIN
-    -- 1. Lấy loại nhân sự của nhân viên đang được gán chuyên khoa
-    SELECT LoaiNhanSu INTO v_LoaiNhanSu 
-    FROM NHAN_VIEN_Y_TE 
-    WHERE MaNhanVien = NEW.MaNhanVien;
-
-    -- 2. Lấy tên chuyên khoa đang được gán
-    SELECT TenChuyenKhoa INTO v_TenChuyenKhoa 
-    FROM CHUYEN_KHOA 
-    WHERE MaChuyenKhoa = NEW.MaChuyenKhoa;
-
-    -- 3. Kiểm tra logic: Nếu là Hộ sinh mà không phải khoa Sản thì báo lỗi
-    IF v_LoaiNhanSu = 'Hộ sinh' AND v_TenChuyenKhoa NOT LIKE '%Sản%' THEN
-        RAISE EXCEPTION 'Lỗi: Nhân viên Hộ sinh chỉ được thuộc chuyên khoa Phụ sản!';
-    END IF;
-
-    RETURN NEW;
-END;
-$BODY$;
-
---Trigger: Trạng thái lịch hẹn phải đi theo đúng luồng: Chờ tiếp nhận -> Đã phân công -> Đang thực hiện -> Hoàn thành. Không được nhảy cóc.
-
-CREATE OR REPLACE FUNCTION public.fn_kiemtraluongtrangthai()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
-AS $BODY$
-BEGIN
-    -- Nếu là cập nhật trạng thái
-    IF OLD.TrangThai = 'Chờ' AND NEW.TrangThai NOT IN ('Đã phân công', 'Đã hủy') THEN
-        RAISE EXCEPTION 'Từ trạng thái Chờ chỉ được chuyển sang Đã phân công hoặc Đã hủy';
-    ELSIF OLD.TrangThai = 'Đã phân công' AND NEW.TrangThai NOT IN ('Đang thực hiện', 'Đã hủy') THEN
-        RAISE EXCEPTION 'Phải chuyển sang Đang thực hiện trước khi Hoàn thành';
-    ELSIF OLD.TrangThai = 'Hoàn thành' THEN
-        RAISE EXCEPTION 'Lịch hẹn đã hoàn thành không được phép sửa trạng thái';
-    END IF;
-    RETURN NEW;
-END;
-$BODY$;
-
---Stored Procedure: Hóa đơn tự động: Tổng tiền = (Đơn giá dịch vụ * 1.2 nếu sau 22h) + Tổng tiền vật tư phát sinh.
+--STORED PROCEDURE: Hóa đơn tự động: Tổng tiền = (Đơn giá dịch vụ * 1.2 nếu sau 22h) + Tổng tiền vật tư phát sinh.
 CREATE OR REPLACE PROCEDURE public.sp_taohoadonthanhtoan(
 	IN p_malichhen character varying)
 LANGUAGE 'plpgsql'
@@ -346,7 +236,7 @@ BEGIN
     );
 END;
 
---Stored Procedure: Hoàn thành lịch khám
+--STORED PROCEDURE: Hoàn thành lịch khám
 CREATE OR REPLACE PROCEDURE public.sp_hoanthanhlichkham(
 	IN p_malichhen character varying,
 	IN p_chandoan text,
@@ -370,10 +260,123 @@ BEGIN
 
 END;
 
---Trigger: Một nhân viên không được có 2 lịch hẹn trùng hoặc chồng lấn thời gian (Start_Time, End_Time).
+--TRIGGER: Trừ điểm uy tín nhân viên khi hủy lịch hẹn 
 
-CREATE OR REPLACE FUNCTION fn_KiemTraTrungLich()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.trg_canhcaonhanvienhuylich()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+DECLARE
+    v_ThoiGianConLai INTERVAL;
+BEGIN
+    -- 1. Chỉ xử lý nếu trạng thái mới bị đổi thành 'Đã hủy'
+    IF NEW.TrangThai = 'Đã hủy' AND OLD.TrangThai != 'Đã hủy' THEN
+        
+        -- 2. Tính xem còn bao nhiêu phút nữa thì đến giờ hẹn
+        -- Lấy (Giờ bắt đầu khám) trừ đi (Giờ hiện tại lúc bấm hủy)
+        v_ThoiGianConLai := NEW.ThoiGianBatDau - CURRENT_TIMESTAMP;
+
+        -- 3. Nếu thời gian còn lại ít hơn 2 tiếng (2 hours)
+        IF v_ThoiGianConLai < INTERVAL '2 hours' THEN
+            
+            -- 4. Đánh dấu cảnh cáo vào hồ sơ nhân viên
+            -- Ở đây mình sẽ giả sử bạn ghi chú vào cột 'GhiChu' hoặc giảm 'DiemUyTin'
+            UPDATE NHAN_VIEN_Y_TE
+            SET DiemUyTin = DiemUyTin - 0.5 -- Trừ 0.5 điểm uy tín vì hủy gấp
+            WHERE MaNhanVien = NEW.MaNhanVien;
+            
+            -- Thông báo cho người dùng biết
+            RAISE NOTICE 'Nhân viên bị trừ điểm uy tín do hủy lịch sát giờ (dưới 2 tiếng).';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$BODY$;
+
+--TRIGGER: Không thể sửa kết quả khám sau 24h.
+
+CREATE OR REPLACE FUNCTION public.trg_khoaketquakham()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+DECLARE
+    v_ThoiGianHoanThanh TIMESTAMP;
+BEGIN
+    SELECT ThoiGianKetThuc INTO v_ThoiGianHoanThanh 
+    FROM LICH_HEN WHERE MaLichHen = OLD.MaLichHen;
+
+    IF v_ThoiGianHoanThanh IS NOT NULL AND (CURRENT_TIMESTAMP - v_ThoiGianHoanThanh) > INTERVAL '24 hours' THEN
+        RAISE EXCEPTION 'Đã quá 24h kể từ khi hoàn thành, không thể sửa kết quả khám';
+    END IF;
+    RETURN NEW;
+END;
+$BODY$;
+
+--TRIGGER: Loại nhân sự 'Hộ Sinh' chỉ được phép ở Khoa Sản Phụ.
+
+CREATE OR REPLACE FUNCTION public.trg_kiemtrahosinhkhoasan()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+DECLARE
+    v_LoaiNhanSu VARCHAR(50);
+    v_TenChuyenKhoa VARCHAR(100);
+BEGIN
+    -- 1. Lấy loại nhân sự của nhân viên đang được gán chuyên khoa
+    SELECT LoaiNhanSu INTO v_LoaiNhanSu 
+    FROM NHAN_VIEN_Y_TE 
+    WHERE MaNhanVien = NEW.MaNhanVien;
+
+    -- 2. Lấy tên chuyên khoa đang được gán
+    SELECT TenChuyenKhoa INTO v_TenChuyenKhoa 
+    FROM CHUYEN_KHOA 
+    WHERE MaChuyenKhoa = NEW.MaChuyenKhoa;
+
+    -- 3. Kiểm tra logic: Nếu là Hộ sinh mà không phải khoa Sản thì báo lỗi
+    IF v_LoaiNhanSu = 'Hộ sinh' AND v_TenChuyenKhoa NOT LIKE '%Sản%' THEN
+        RAISE EXCEPTION 'Lỗi: Nhân viên Hộ sinh chỉ được thuộc chuyên khoa Phụ sản!';
+    END IF;
+
+    RETURN NEW;
+END;
+$BODY$;
+
+--TRIGGER: Trạng thái lịch hẹn phải đi theo đúng luồng: Chờ tiếp nhận -> Đã phân công -> Đang thực hiện -> Hoàn thành. Không được nhảy cóc.
+
+CREATE OR REPLACE FUNCTION public.trg_kiemtraluongtrangthai()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    -- Nếu là cập nhật trạng thái
+    IF OLD.TrangThai = 'Chờ' AND NEW.TrangThai NOT IN ('Đã phân công', 'Đã hủy') THEN
+        RAISE EXCEPTION 'Từ trạng thái Chờ chỉ được chuyển sang Đã phân công hoặc Đã hủy';
+    ELSIF OLD.TrangThai = 'Đã phân công' AND NEW.TrangThai NOT IN ('Đang thực hiện', 'Đã hủy') THEN
+        RAISE EXCEPTION 'Phải chuyển sang Đang thực hiện trước khi Hoàn thành';
+    ELSIF OLD.TrangThai = 'Hoàn thành' THEN
+        RAISE EXCEPTION 'Lịch hẹn đã hoàn thành không được phép sửa trạng thái';
+    END IF;
+    RETURN NEW;
+END;
+$BODY$;
+
+--TRIGGER: Một nhân viên không được có 2 lịch hẹn trùng hoặc chồng lấn thời gian (Start_Time, End_Time).
+
+CREATE OR REPLACE FUNCTION public.trg_kiemtratrunglich()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM LICH_HEN 
@@ -385,33 +388,33 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_KiemTraTrungLich
-BEFORE INSERT OR UPDATE ON LICH_HEN
-FOR EACH ROW EXECUTE FUNCTION fn_KiemTraTrungLich();
+$BODY$;
 
 
---Trigger: Mỗi khách hàng chỉ được quản lí tối đa 10 hồ sơ bệnh nhân.
+--TRIGGER: Mỗi khách hàng chỉ được quản lí tối đa 10 hồ sơ bệnh nhân.
 
-CREATE OR REPLACE FUNCTION fn_GioiHanHoSoBenhNhan()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.trg_gioihanhosobenhnhan()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
 BEGIN
     IF (SELECT COUNT(*) FROM BENH_NHAN WHERE MaKhachHang = NEW.MaKhachHang) >= 10 THEN
         RAISE EXCEPTION 'Mỗi khách hàng chỉ được quản lý tối đa 10 hồ sơ bệnh nhân';
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$BODY$;
 
-CREATE TRIGGER trg_GioiHanHoSoBenhNhan
-BEFORE INSERT ON BENH_NHAN
-FOR EACH ROW EXECUTE FUNCTION fn_GioiHanHoSoBenhNhan();
+-- TRIGGER: Tự động trừ kho vật tư sau khi thêm vào kết quả khám.
 
--- Trigger: Tự động trừ kho vật tư sau khi thêm vào kết quả khám.
-
-CREATE OR REPLACE FUNCTION fn_TruTonKhoVatTu()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.trg_trutonkhovattu()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
 BEGIN
     -- Cập nhật giảm số lượng tồn
     UPDATE VAT_TU_Y_TE 
@@ -425,13 +428,69 @@ BEGIN
     
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$BODY$;
+-- AI_TRIGGER: AI Phân tích cảm xúc
 
-CREATE TRIGGER trg_TruTonKhoVatTu
-AFTER INSERT ON CHI_TIET_VAT_TU
-FOR EACH ROW EXECUTE FUNCTION fn_TruTonKhoVatTu();
+CREATE OR REPLACE FUNCTION public.trg_ai_phantichcamxuc()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    -- 1. TÍCH CỰC (Tương ứng SoSao = 4, 5)
+    IF NEW.SoSao >= 4 
+       OR NEW.NoiDung ILIKE ANY (ARRAY[
+          '%Tuyệt vời%', '%Rất hài lòng%', '%sạch sẽ%', '%hiện đại%', 
+          '%Dịch vụ tốt%', '%tận tâm%', '%Hài lòng%'
+       ]) 
+    THEN
+        NEW.AI_PhanTichCamXuc := 'Tích cực';
 
---Funciton: tính doanh thu theo ngày
+    -- 2. TIÊU CỰC (Tương ứng SoSao = 1, 2)
+    ELSIF NEW.SoSao <= 2 
+       OR NEW.NoiDung ILIKE ANY (ARRAY[
+          '%Không hài lòng%', '%chưa tốt%', '%thất vọng%', 
+          '%quá tệ%', '%không quay lại%'
+       ]) 
+    THEN
+        NEW.AI_PhanTichCamXuc := 'Tiêu cực';
+
+    -- 3. TRUNG TÍNH (Tương ứng SoSao = 3)
+    -- Bao gồm các sắc thái về thời gian chờ và mật độ khách
+    ELSE
+        NEW.AI_PhanTichCamXuc := 'Trung tính';
+    END IF;
+
+    RETURN NEW;
+END;
+$BODY$;
+
+--AI_TRIGGER: AI phân tích sức khỏa
+
+CREATE OR REPLACE FUNCTION public.trg_ai_phantichsuckhoe()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    -- Giả lập AI: Nếu Huyết áp cao + Nhịp tim nhanh + Người cao tuổi
+    IF (NEW.NhipTim > 100 AND NEW.NhietDo > 38.5) THEN
+        NEW.AI_CanhBaoRuiRo := 'CẢNH BÁO AI: Nguy cơ nhiễm trùng huyết hoặc suy tim cấp. Cần theo dõi đặc biệt.';
+        NEW.AI_DoTinCay := 0.92;
+    ELSIF (NEW.NhietDo > 39.0) THEN
+        NEW.AI_CanhBaoRuiRo := 'CẢNH BÁO AI: Nguy cơ sốt co giật.';
+        NEW.AI_DoTinCay := 0.85;
+    ELSE
+        NEW.AI_CanhBaoRuiRo := 'AI: Chỉ số trong ngưỡng an toàn.';
+        NEW.AI_DoTinCay := 0.95;
+    END IF;
+    RETURN NEW;
+END;
+$BODY$;
+
+--FUNCTION: tính doanh thu theo ngày
 CREATE OR REPLACE FUNCTION public.fn_doanhthungay(
 	p_ngay date)
     RETURNS numeric
@@ -451,7 +510,7 @@ BEGIN
 END;
 $BODY$;
 
---Function: kiểm tra nhân viên rảnh.
+--FUNCTION: kiểm tra nhân viên rảnh.
 
 CREATE OR REPLACE FUNCTION public.fn_kiemtranhanvienranh(
 	p_manv character varying,
@@ -477,7 +536,7 @@ BEGIN
 END;
 $BODY$;
 
---Function: Kiểm tra mức độ khẩn cấp của bệnh nhân.
+--FUNCTION: Kiểm tra mức độ khẩn cấp của bệnh nhân.
 
 CREATE OR REPLACE FUNCTION public.fn_mucdokhancap(
 	p_nhietdo numeric,
@@ -500,7 +559,7 @@ END;
 $BODY$;
 
 
---Function: Phân loại nhóm tuổi.
+--FUNCTION: Phân loại nhóm tuổi.
 
 CREATE OR REPLACE FUNCTION public.fn_phanloainhomtuoi(
 	p_ngaysinh date)
@@ -522,7 +581,7 @@ BEGIN
 END;
 $BODY$;
 
---Function: Tính hóa đơn sau thuế.
+--FUNCTION: Tính hóa đơn sau thuế.
 
 CREATE OR REPLACE FUNCTION public.fn_tinhgiasauthue(
 	p_sotien numeric,
@@ -537,7 +596,7 @@ BEGIN
 END;
 $BODY$;
 
---Function: Tính thời gian khám.
+--FUNCTION: Tính thời gian khám.
 
 CREATE OR REPLACE FUNCTION public.fn_tinhthoigiankham(
 	p_batdau timestamp without time zone,
@@ -555,7 +614,7 @@ BEGIN
 END;
 $BODY$;
 
---Function: Tính tuổi người.
+--FUNCTION: Tính tuổi người.
 
 CREATE OR REPLACE FUNCTION public.fn_tinhtuoi(
 	p_ngaysinh date)
@@ -566,5 +625,48 @@ CREATE OR REPLACE FUNCTION public.fn_tinhtuoi(
 AS $BODY$
 BEGIN
     RETURN EXTRACT(YEAR FROM AGE(CURRENT_DATE, p_NgaySinh));
+END;
+$BODY$;
+
+--FUNCTION: tính doanh theo ngày
+
+CREATE OR REPLACE FUNCTION public.fn_doanhthungay(
+	p_ngay date)
+    RETURNS numeric
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
+DECLARE
+    v_Tong DECIMAL;
+BEGIN
+    -- Ép kiểu ::DATE để đảm bảo khớp chính xác ngày
+    SELECT SUM(TongThanhToan) INTO v_Tong 
+    FROM HOA_DON 
+    WHERE NgayLap::DATE = p_Ngay;
+    
+    RETURN COALESCE(v_Tong, 0);
+END;
+$BODY$;
+
+--FUNCTION: Kiếm tra mức độ khẩn cấp của bệnh nhân
+
+CREATE OR REPLACE FUNCTION public.fn_mucdokhancap(
+	p_nhietdo numeric,
+	p_nhiptim integer)
+    RETURNS text
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
+BEGIN
+    -- Logic đơn giản: Sốt cao (>39 độ) hoặc nhịp tim quá nhanh (>120) là khẩn cấp
+    IF p_NhietDo > 39.0 OR p_NhipTim > 120 THEN
+        RETURN 'KHẨN CẤP - ƯU TIÊN 1';
+    ELSIF p_NhietDo > 37.5 OR p_NhipTim > 100 THEN
+        RETURN 'THEO DÕI - ƯU TIÊN 2';
+    ELSE
+        RETURN 'BÌNH THƯỜNG';
+    END IF;
 END;
 $BODY$;
