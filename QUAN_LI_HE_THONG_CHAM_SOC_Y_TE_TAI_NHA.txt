@@ -176,6 +176,7 @@ CREATE TABLE DANH_GIA (
     NoiDung TEXT,
     LyDoKhieuNai TEXT,                                               -- Quy tắc 11
     NgayDanhGia TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ 	ai_phantichcamxuc VARCHAR(50),
     -- Ràng buộc
     CONSTRAINT chk_dg_sao CHECK (SoSao BETWEEN 1 AND 5),
     -- Quy tắc 11: Nếu sao <= 2, bắt buộc điền Lý do khiếu nại
