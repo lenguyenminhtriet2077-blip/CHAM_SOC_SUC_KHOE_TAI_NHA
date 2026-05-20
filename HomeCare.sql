@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict ZdnqyoqxyJUGzP46IsGwnUPaU87VDUIt2KJSJ3AKzl7wHSrAUGUrMhq6P65ybYL
+\restrict lEO6aQOaS5fK1mfJvhfb5OqElrableDpoghxnMsdpot7BrP1ribbQS5K9QZ2nfM
 
 -- Dumped from database version 17.9
 -- Dumped by pg_dump version 17.9
 
--- Started on 2026-05-19 12:59:20
+-- Started on 2026-05-20 13:11:27
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -22,7 +22,7 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- TOC entry 240 (class 1255 OID 25734)
+-- TOC entry 237 (class 1255 OID 25734)
 -- Name: fn_doanhthungay(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -42,7 +42,7 @@ $$;
 
 
 --
--- TOC entry 241 (class 1255 OID 25735)
+-- TOC entry 238 (class 1255 OID 25735)
 -- Name: fn_kiemtranhanvienranh(character varying, timestamp without time zone, timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -65,7 +65,7 @@ $$;
 
 
 --
--- TOC entry 242 (class 1255 OID 25736)
+-- TOC entry 239 (class 1255 OID 25736)
 -- Name: fn_mucdokhancap(numeric, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -85,7 +85,7 @@ $$;
 
 
 --
--- TOC entry 238 (class 1255 OID 25732)
+-- TOC entry 235 (class 1255 OID 25732)
 -- Name: fn_phanloainhomtuoi(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -107,7 +107,7 @@ $$;
 
 
 --
--- TOC entry 239 (class 1255 OID 25733)
+-- TOC entry 236 (class 1255 OID 25733)
 -- Name: fn_tinhgiasauthue(numeric, numeric); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -121,7 +121,7 @@ $$;
 
 
 --
--- TOC entry 236 (class 1255 OID 25727)
+-- TOC entry 233 (class 1255 OID 25727)
 -- Name: fn_tinhthoigiankham(timestamp without time zone, timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -138,7 +138,7 @@ $$;
 
 
 --
--- TOC entry 237 (class 1255 OID 25731)
+-- TOC entry 234 (class 1255 OID 25731)
 -- Name: fn_tinhtuoi(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -152,7 +152,7 @@ $$;
 
 
 --
--- TOC entry 255 (class 1255 OID 25738)
+-- TOC entry 252 (class 1255 OID 25738)
 -- Name: sp_hoanthanhlichkham(character varying, text, character varying, integer, numeric); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -176,7 +176,7 @@ $$;
 
 
 --
--- TOC entry 254 (class 1255 OID 25737)
+-- TOC entry 251 (class 1255 OID 25737)
 -- Name: sp_taohoadonthanhtoan(character varying); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -214,7 +214,36 @@ $$;
 
 
 --
--- TOC entry 263 (class 1255 OID 25746)
+-- TOC entry 262 (class 1255 OID 26221)
+-- Name: sp_tudong_kichhoat_ca_kham(); Type: PROCEDURE; Schema: public; Owner: -
+--
+
+CREATE PROCEDURE public.sp_tudong_kichhoat_ca_kham()
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- 1. TỰ ĐỘNG CẬP NHẬT LỊCH HẸN KHI ĐẾN GIỜ (Kích hoạt trigger đổi luôn trạng thái NVYT sang Đang bận)
+    UPDATE public.lich_hen
+    SET trangthai = 'Đang thực hiện'
+    WHERE trangthai = 'Đã phân công'
+      AND CURRENT_TIMESTAMP >= thoigianbatdau;
+
+    -- 2. TỰ ĐỘNG GIẢI PHÓNG NHÂN VIÊN KHI HẾT GIỜ KHÁM DỰ KIẾN (Nếu có điền thoigianketthuc)
+    UPDATE public.nhan_vien_y_te
+    SET trangthai = 'Sẵn sàng'
+    WHERE manhanvien IN (
+        SELECT manhanvien 
+        FROM public.lich_hen 
+        WHERE trangthai = 'Đang thực hiện' 
+          AND thoigianketthuc IS NOT NULL 
+          AND CURRENT_TIMESTAMP > thoigianketthuc
+    );
+END;
+$$;
+
+
+--
+-- TOC entry 258 (class 1255 OID 25746)
 -- Name: trg_ai_phantichcamxuc(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -239,7 +268,7 @@ $$;
 
 
 --
--- TOC entry 264 (class 1255 OID 25747)
+-- TOC entry 259 (class 1255 OID 25747)
 -- Name: trg_ai_phantichsuckhoe(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -263,7 +292,7 @@ $$;
 
 
 --
--- TOC entry 256 (class 1255 OID 25739)
+-- TOC entry 253 (class 1255 OID 25739)
 -- Name: trg_canhcaonhanvienhuylich(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -290,7 +319,39 @@ $$;
 
 
 --
--- TOC entry 261 (class 1255 OID 25744)
+-- TOC entry 263 (class 1255 OID 26222)
+-- Name: trg_chautrunglich_nhanvien(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_chautrunglich_nhanvien() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Chỉ kiểm tra khi ca hẹn có gán nhân viên y tế
+    IF NEW.MaNhanVien IS NOT NULL THEN
+        -- Kiểm tra xem có lịch hẹn nào khác của nhân viên này bị đè giờ không
+        -- Ca trùng là ca chưa bị hủy/chưa hoàn thành và có thời gian giao thoa trong vòng 1 tiếng
+        IF EXISTS (
+            SELECT 1 FROM public.LICH_HEN
+            WHERE MaNhanVien = NEW.MaNhanVien
+              AND MaLichHen != NEW.MaLichHen -- Bỏ qua chính nó khi UPDATE
+              AND TrangThai NOT IN ('Hoàn thành', 'Đã hủy')
+              -- Logic chặn giao thoa thời gian (Giả định mỗi ca cách nhau tối thiểu 60 phút)
+              AND NEW.ThoiGianBatDau >= ThoiGianBatDau - INTERVAL '59 minutes'
+              AND NEW.ThoiGianBatDau <= ThoiGianBatDau + INTERVAL '59 minutes'
+        ) THEN
+            -- Bắn lỗi chặn đứng hành động INSERT/UPDATE lại ngay lập tức
+            RAISE EXCEPTION 'Lỗi trùng lịch: Nhân viên % đã có lịch hẹn khác trong khung giờ này!', NEW.MaNhanVien;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- TOC entry 256 (class 1255 OID 25744)
 -- Name: trg_gioihanhosobenhnhan(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -307,7 +368,7 @@ $$;
 
 
 --
--- TOC entry 257 (class 1255 OID 25740)
+-- TOC entry 254 (class 1255 OID 25740)
 -- Name: trg_khoaketquakham(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -329,7 +390,7 @@ $$;
 
 
 --
--- TOC entry 258 (class 1255 OID 25741)
+-- TOC entry 261 (class 1255 OID 25741)
 -- Name: trg_kiemtrahosinhkhoasan(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -340,10 +401,11 @@ DECLARE
     v_LoaiNhanSu VARCHAR(50);
     v_TenChuyenKhoa VARCHAR(100);
 BEGIN
-    SELECT LoaiNhanSu INTO v_LoaiNhanSu FROM NHAN_VIEN_Y_TE WHERE MaNhanVien = NEW.MaNhanVien;
-    SELECT TenChuyenKhoa INTO v_TenChuyenKhoa FROM CHUYEN_KHOA WHERE MaChuyenKhoa = NEW.MaChuyenKhoa;
+    SELECT LoaiNhanSu INTO v_LoaiNhanSu FROM public.NHAN_VIEN_Y_TE WHERE MaNhanVien = NEW.MaNhanVien;
+    SELECT TenChuyenKhoa INTO v_TenChuyenKhoa FROM public.CHUYEN_KHOA WHERE MaChuyenKhoa = NEW.MaChuyenKhoa;
 
-    IF v_LoaiNhanSu = 'Hộ sinh' AND v_TenChuyenKhoa NOT LIKE '%Sản%' THEN
+    -- Đổi từ LIKE sang ILIKE để chấp nhận cả 'sản', 'Sản', 'SẢN'
+    IF v_LoaiNhanSu = 'Hộ sinh' AND v_TenChuyenKhoa NOT ILIKE '%sản%' THEN
         RAISE EXCEPTION 'Lỗi: Nhân viên Hộ sinh chỉ được thuộc chuyên khoa Phụ sản!';
     END IF;
     RETURN NEW;
@@ -352,7 +414,7 @@ $$;
 
 
 --
--- TOC entry 259 (class 1255 OID 25742)
+-- TOC entry 260 (class 1255 OID 25742)
 -- Name: trg_kiemtraluongtrangthai(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -360,20 +422,60 @@ CREATE FUNCTION public.trg_kiemtraluongtrangthai() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF OLD.TrangThai = 'Chờ' AND NEW.TrangThai NOT IN ('Đã phân công', 'Đã hủy') THEN
-        RAISE EXCEPTION 'Từ trạng thái Chờ chỉ được chuyển sang Đã phân công hoặc Đã hủy';
-    ELSIF OLD.TrangThai = 'Đã phân công' AND NEW.TrangThai NOT IN ('Đang thực hiện', 'Đã hủy') THEN
-        RAISE EXCEPTION 'Phải chuyển sang Đang thực hiện trước khi Hoàn thành';
-    ELSIF OLD.TrangThai = 'Hoàn thành' THEN
-        RAISE EXCEPTION 'Lịch hẹn đã hoàn thành không được phép sửa trạng thái';
+    -- 1. Chặn sửa ca đã đóng
+    IF TG_OP = 'UPDATE' AND OLD.TrangThai IN ('Hoàn thành', 'Đã hủy') THEN
+        RAISE EXCEPTION 'Lỗi quy trình: Lịch hẹn đã hoàn thành hoặc đã hủy không thể chỉnh sửa!';
     END IF;
+
+    -- 2. Xử lý khi trạng thái chủ động chuyển sang Đã hủy
+    IF NEW.TrangThai = 'Đã hủy' THEN
+        IF NEW.MaNhanVien IS NOT NULL THEN
+            UPDATE public.NHAN_VIEN_Y_TE SET TrangThai = 'Sẵn sàng' WHERE MaNhanVien = NEW.MaNhanVien;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- 3. ÉP TRẠNG THÁI DỰA TRÊN THỜI GIAN VÀ NHÂN SỰ
+    IF NEW.MaNhanVien IS NULL THEN
+        IF CURRENT_TIMESTAMP > NEW.ThoiGianBatDau THEN
+            NEW.TrangThai := 'Đã hủy';
+        ELSE
+            NEW.TrangThai := 'Chờ';
+        END IF;
+    ELSE
+        -- Nếu giữ nguyên Hoàn thành từ SP hoanthanhlichkham
+        IF NEW.TrangThai = 'Hoàn thành' THEN
+            NULL;
+        -- Nếu có người nhận + chưa tới giờ
+        ELSIF CURRENT_TIMESTAMP < NEW.ThoiGianBatDau THEN
+            NEW.TrangThai := 'Đã phân công';
+        -- Nếu có người nhận + ĐÃ ĐẾN GIỜ HOẶC QUÁ GIỜ hoặc được SP quét chủ động chuyển sang 'Đang thực hiện'
+        ELSIF CURRENT_TIMESTAMP >= NEW.ThoiGianBatDau OR NEW.TrangThai = 'Đang thực hiện' THEN
+            NEW.TrangThai := 'Đang thực hiện';
+        END IF;
+    END IF;
+
+    -- 4. ĐỒNG BỘ TRẠNG THÁI CHO NHÂN VIÊN Y TẾ (Sửa để ăn chặt với SP quét)
+    IF NEW.TrangThai = 'Đang thực hiện' AND NEW.MaNhanVien IS NOT NULL THEN
+        UPDATE public.NHAN_VIEN_Y_TE SET TrangThai = 'Đang bận' WHERE MaNhanVien = NEW.MaNhanVien;
+    ELSIF NEW.TrangThai IN ('Đã phân công', 'Hoàn thành') AND NEW.MaNhanVien IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.lich_hen 
+            WHERE MaNhanVien = NEW.MaNhanVien 
+            AND MaLichHen != NEW.MaLichHen 
+            AND TrangThai = 'Đang thực hiện'
+        ) THEN
+            UPDATE public.NHAN_VIEN_Y_TE SET TrangThai = 'Sẵn sàng' WHERE MaNhanVien = NEW.MaNhanVien;
+        END IF;
+    END IF;
+
     RETURN NEW;
 END;
 $$;
 
 
 --
--- TOC entry 260 (class 1255 OID 25743)
+-- TOC entry 255 (class 1255 OID 25743)
 -- Name: trg_kiemtratrunglich(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -395,7 +497,7 @@ $$;
 
 
 --
--- TOC entry 262 (class 1255 OID 25745)
+-- TOC entry 257 (class 1255 OID 25745)
 -- Name: trg_trutonkhovattu(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -453,7 +555,7 @@ CREATE TABLE public.benh_nhan (
 
 
 --
--- TOC entry 228 (class 1259 OID 25662)
+-- TOC entry 227 (class 1259 OID 25662)
 -- Name: chi_tiet_vat_tu; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -479,7 +581,7 @@ CREATE TABLE public.chuyen_khoa (
 
 
 --
--- TOC entry 230 (class 1259 OID 25698)
+-- TOC entry 229 (class 1259 OID 25698)
 -- Name: danh_gia; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -515,7 +617,7 @@ CREATE TABLE public.dich_vu (
 
 
 --
--- TOC entry 229 (class 1259 OID 25679)
+-- TOC entry 228 (class 1259 OID 25679)
 -- Name: hoa_don; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -534,7 +636,7 @@ CREATE TABLE public.hoa_don (
 
 
 --
--- TOC entry 226 (class 1259 OID 25638)
+-- TOC entry 225 (class 1259 OID 25638)
 -- Name: ket_qua_kham; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -570,7 +672,7 @@ CREATE TABLE public.khach_hang (
 
 
 --
--- TOC entry 225 (class 1259 OID 25615)
+-- TOC entry 232 (class 1259 OID 26050)
 -- Name: lich_hen; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -647,7 +749,7 @@ CREATE TABLE public.nhan_vien_y_te (
 
 
 --
--- TOC entry 227 (class 1259 OID 25654)
+-- TOC entry 226 (class 1259 OID 25654)
 -- Name: vat_tu_y_te; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -662,26 +764,7 @@ CREATE TABLE public.vat_tu_y_te (
 
 
 --
--- TOC entry 231 (class 1259 OID 25757)
--- Name: vw_ai_canhbaosuckhoe; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.vw_ai_canhbaosuckhoe AS
- SELECT bn.mabenhnhan,
-    bn.hoten,
-    kq.chandoansobo,
-        CASE
-            WHEN (kq.nhietdo > (39)::numeric) THEN 'Nguy cơ cao'::text
-            WHEN ((kq.nhietdo >= 37.5) AND (kq.nhietdo <= (39)::numeric)) THEN 'Nguy cơ trung bình'::text
-            ELSE 'Ổn định'::text
-        END AS muccanhbao
-   FROM ((public.benh_nhan bn
-     JOIN public.lich_hen lh ON (((bn.mabenhnhan)::text = (lh.mabenhnhan)::text)))
-     JOIN public.ket_qua_kham kq ON (((lh.malichhen)::text = (kq.malichhen)::text)));
-
-
---
--- TOC entry 232 (class 1259 OID 25762)
+-- TOC entry 230 (class 1259 OID 25762)
 -- Name: vw_bacsiuytin; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -697,7 +780,7 @@ CREATE VIEW public.vw_bacsiuytin AS
 
 
 --
--- TOC entry 235 (class 1259 OID 25776)
+-- TOC entry 231 (class 1259 OID 25776)
 -- Name: vw_canhbaovattu; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -711,47 +794,7 @@ CREATE VIEW public.vw_canhbaovattu AS
 
 
 --
--- TOC entry 233 (class 1259 OID 25766)
--- Name: vw_doanhthutheodichvu; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.vw_doanhthutheodichvu AS
- SELECT dv.madichvu,
-    dv.tendichvu,
-    count(hd.mahoadon) AS soluotsudung,
-    sum(hd.tongtiendichvu) AS doanhthudichvu,
-    sum(hd.tongthanhtoan) AS tongdoanhthuthucte
-   FROM ((public.dich_vu dv
-     LEFT JOIN public.lich_hen lh ON (((dv.madichvu)::text = (lh.madichvu)::text)))
-     LEFT JOIN public.hoa_don hd ON (((lh.malichhen)::text = (hd.malichhen)::text)))
-  GROUP BY dv.madichvu, dv.tendichvu;
-
-
---
--- TOC entry 234 (class 1259 OID 25771)
--- Name: vw_lichsukhambenhnhan; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.vw_lichsukhambenhnhan AS
- SELECT bn.mabenhnhan,
-    bn.hoten AS tenbenhnhan,
-    lh.thoigianbatdau,
-    dv.tendichvu,
-    nv.hoten AS bacsithuchien,
-    kq.chandoansobo,
-    kq.ylenh,
-    hd.trangthaithanhtoan
-   FROM (((((public.benh_nhan bn
-     JOIN public.lich_hen lh ON (((bn.mabenhnhan)::text = (lh.mabenhnhan)::text)))
-     JOIN public.dich_vu dv ON (((lh.madichvu)::text = (dv.madichvu)::text)))
-     JOIN public.nhan_vien_y_te nv ON (((lh.manhanvien)::text = (nv.manhanvien)::text)))
-     LEFT JOIN public.ket_qua_kham kq ON (((lh.malichhen)::text = (kq.malichhen)::text)))
-     LEFT JOIN public.hoa_don hd ON (((lh.malichhen)::text = (hd.malichhen)::text)))
-  ORDER BY lh.thoigianbatdau DESC;
-
-
---
--- TOC entry 4892 (class 2606 OID 25579)
+-- TOC entry 4882 (class 2606 OID 25579)
 -- Name: admin admin_mauser_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -760,7 +803,7 @@ ALTER TABLE ONLY public.admin
 
 
 --
--- TOC entry 4894 (class 2606 OID 25577)
+-- TOC entry 4884 (class 2606 OID 25577)
 -- Name: admin admin_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -769,7 +812,7 @@ ALTER TABLE ONLY public.admin
 
 
 --
--- TOC entry 4882 (class 2606 OID 25540)
+-- TOC entry 4872 (class 2606 OID 25540)
 -- Name: benh_nhan benh_nhan_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -778,7 +821,7 @@ ALTER TABLE ONLY public.benh_nhan
 
 
 --
--- TOC entry 4910 (class 2606 OID 25668)
+-- TOC entry 4898 (class 2606 OID 25668)
 -- Name: chi_tiet_vat_tu chi_tiet_vat_tu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -787,7 +830,7 @@ ALTER TABLE ONLY public.chi_tiet_vat_tu
 
 
 --
--- TOC entry 4896 (class 2606 OID 25589)
+-- TOC entry 4886 (class 2606 OID 25589)
 -- Name: chuyen_khoa chuyen_khoa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -796,7 +839,7 @@ ALTER TABLE ONLY public.chuyen_khoa
 
 
 --
--- TOC entry 4916 (class 2606 OID 25709)
+-- TOC entry 4904 (class 2606 OID 25709)
 -- Name: danh_gia danh_gia_malichhen_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -805,7 +848,7 @@ ALTER TABLE ONLY public.danh_gia
 
 
 --
--- TOC entry 4918 (class 2606 OID 25707)
+-- TOC entry 4906 (class 2606 OID 25707)
 -- Name: danh_gia danh_gia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -814,7 +857,7 @@ ALTER TABLE ONLY public.danh_gia
 
 
 --
--- TOC entry 4900 (class 2606 OID 25614)
+-- TOC entry 4890 (class 2606 OID 25614)
 -- Name: dich_vu dich_vu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -823,7 +866,7 @@ ALTER TABLE ONLY public.dich_vu
 
 
 --
--- TOC entry 4912 (class 2606 OID 25692)
+-- TOC entry 4900 (class 2606 OID 25692)
 -- Name: hoa_don hoa_don_malichhen_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -832,7 +875,7 @@ ALTER TABLE ONLY public.hoa_don
 
 
 --
--- TOC entry 4914 (class 2606 OID 25690)
+-- TOC entry 4902 (class 2606 OID 25690)
 -- Name: hoa_don hoa_don_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -841,7 +884,7 @@ ALTER TABLE ONLY public.hoa_don
 
 
 --
--- TOC entry 4904 (class 2606 OID 25648)
+-- TOC entry 4892 (class 2606 OID 25648)
 -- Name: ket_qua_kham ket_qua_kham_malichhen_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -850,7 +893,7 @@ ALTER TABLE ONLY public.ket_qua_kham
 
 
 --
--- TOC entry 4906 (class 2606 OID 25646)
+-- TOC entry 4894 (class 2606 OID 25646)
 -- Name: ket_qua_kham ket_qua_kham_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -859,7 +902,7 @@ ALTER TABLE ONLY public.ket_qua_kham
 
 
 --
--- TOC entry 4876 (class 2606 OID 25524)
+-- TOC entry 4866 (class 2606 OID 25524)
 -- Name: khach_hang khach_hang_mauser_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -868,7 +911,7 @@ ALTER TABLE ONLY public.khach_hang
 
 
 --
--- TOC entry 4878 (class 2606 OID 25522)
+-- TOC entry 4868 (class 2606 OID 25522)
 -- Name: khach_hang khach_hang_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -877,7 +920,7 @@ ALTER TABLE ONLY public.khach_hang
 
 
 --
--- TOC entry 4880 (class 2606 OID 25526)
+-- TOC entry 4870 (class 2606 OID 25526)
 -- Name: khach_hang khach_hang_sodienthoai_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -886,7 +929,7 @@ ALTER TABLE ONLY public.khach_hang
 
 
 --
--- TOC entry 4902 (class 2606 OID 25622)
+-- TOC entry 4908 (class 2606 OID 26057)
 -- Name: lich_hen lich_hen_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -895,7 +938,7 @@ ALTER TABLE ONLY public.lich_hen
 
 
 --
--- TOC entry 4872 (class 2606 OID 25516)
+-- TOC entry 4862 (class 2606 OID 25516)
 -- Name: nguoi_dung nguoi_dung_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -904,7 +947,7 @@ ALTER TABLE ONLY public.nguoi_dung
 
 
 --
--- TOC entry 4874 (class 2606 OID 25514)
+-- TOC entry 4864 (class 2606 OID 25514)
 -- Name: nguoi_dung nguoi_dung_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -913,7 +956,7 @@ ALTER TABLE ONLY public.nguoi_dung
 
 
 --
--- TOC entry 4898 (class 2606 OID 25594)
+-- TOC entry 4888 (class 2606 OID 25594)
 -- Name: nhan_vien_chuyen_khoa nhan_vien_chuyen_khoa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -922,7 +965,7 @@ ALTER TABLE ONLY public.nhan_vien_chuyen_khoa
 
 
 --
--- TOC entry 4884 (class 2606 OID 25563)
+-- TOC entry 4874 (class 2606 OID 25563)
 -- Name: nhan_vien_y_te nhan_vien_y_te_cccd_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -931,7 +974,7 @@ ALTER TABLE ONLY public.nhan_vien_y_te
 
 
 --
--- TOC entry 4886 (class 2606 OID 25561)
+-- TOC entry 4876 (class 2606 OID 25561)
 -- Name: nhan_vien_y_te nhan_vien_y_te_mauser_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -940,7 +983,7 @@ ALTER TABLE ONLY public.nhan_vien_y_te
 
 
 --
--- TOC entry 4888 (class 2606 OID 25559)
+-- TOC entry 4878 (class 2606 OID 25559)
 -- Name: nhan_vien_y_te nhan_vien_y_te_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -949,7 +992,7 @@ ALTER TABLE ONLY public.nhan_vien_y_te
 
 
 --
--- TOC entry 4890 (class 2606 OID 25565)
+-- TOC entry 4880 (class 2606 OID 25565)
 -- Name: nhan_vien_y_te nhan_vien_y_te_sodienthoai_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -958,7 +1001,7 @@ ALTER TABLE ONLY public.nhan_vien_y_te
 
 
 --
--- TOC entry 4908 (class 2606 OID 25661)
+-- TOC entry 4896 (class 2606 OID 25661)
 -- Name: vat_tu_y_te vat_tu_y_te_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -967,7 +1010,7 @@ ALTER TABLE ONLY public.vat_tu_y_te
 
 
 --
--- TOC entry 4941 (class 2620 OID 25756)
+-- TOC entry 4925 (class 2620 OID 25756)
 -- Name: danh_gia trigger_ai_phantichcamxuc; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -975,7 +1018,7 @@ CREATE TRIGGER trigger_ai_phantichcamxuc BEFORE INSERT OR UPDATE ON public.danh_
 
 
 --
--- TOC entry 4938 (class 2620 OID 25752)
+-- TOC entry 4922 (class 2620 OID 25752)
 -- Name: ket_qua_kham trigger_ai_phantichsuckhoe; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -983,15 +1026,15 @@ CREATE TRIGGER trigger_ai_phantichsuckhoe BEFORE INSERT OR UPDATE ON public.ket_
 
 
 --
--- TOC entry 4935 (class 2620 OID 25750)
--- Name: lich_hen trigger_canhcaonhanvienhuylich; Type: TRIGGER; Schema: public; Owner: -
+-- TOC entry 4926 (class 2620 OID 26223)
+-- Name: lich_hen trigger_chan_trung_lich; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trigger_canhcaonhanvienhuylich BEFORE UPDATE ON public.lich_hen FOR EACH ROW EXECUTE FUNCTION public.trg_canhcaonhanvienhuylich();
+CREATE TRIGGER trigger_chan_trung_lich BEFORE INSERT OR UPDATE ON public.lich_hen FOR EACH ROW EXECUTE FUNCTION public.trg_chautrunglich_nhanvien();
 
 
 --
--- TOC entry 4933 (class 2620 OID 25754)
+-- TOC entry 4920 (class 2620 OID 25754)
 -- Name: benh_nhan trigger_gioihanhosobenhnhan; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -999,7 +1042,7 @@ CREATE TRIGGER trigger_gioihanhosobenhnhan BEFORE INSERT ON public.benh_nhan FOR
 
 
 --
--- TOC entry 4939 (class 2620 OID 25751)
+-- TOC entry 4923 (class 2620 OID 25751)
 -- Name: ket_qua_kham trigger_khoaketquakham; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1007,7 +1050,7 @@ CREATE TRIGGER trigger_khoaketquakham BEFORE DELETE OR UPDATE ON public.ket_qua_
 
 
 --
--- TOC entry 4934 (class 2620 OID 25753)
+-- TOC entry 4921 (class 2620 OID 25753)
 -- Name: nhan_vien_chuyen_khoa trigger_kiemtrahosinhkhoasan; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1015,23 +1058,15 @@ CREATE TRIGGER trigger_kiemtrahosinhkhoasan BEFORE INSERT OR UPDATE ON public.nh
 
 
 --
--- TOC entry 4936 (class 2620 OID 25748)
--- Name: lich_hen trigger_kiemtraluongtrangthai; Type: TRIGGER; Schema: public; Owner: -
+-- TOC entry 4927 (class 2620 OID 26219)
+-- Name: lich_hen trigger_lich_hen_logic; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trigger_kiemtraluongtrangthai BEFORE UPDATE ON public.lich_hen FOR EACH ROW EXECUTE FUNCTION public.trg_kiemtraluongtrangthai();
-
-
---
--- TOC entry 4937 (class 2620 OID 25749)
--- Name: lich_hen trigger_kiemtratrunglich; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trigger_kiemtratrunglich BEFORE INSERT OR UPDATE ON public.lich_hen FOR EACH ROW EXECUTE FUNCTION public.trg_kiemtratrunglich();
+CREATE TRIGGER trigger_lich_hen_logic BEFORE INSERT OR UPDATE ON public.lich_hen FOR EACH ROW EXECUTE FUNCTION public.trg_kiemtraluongtrangthai();
 
 
 --
--- TOC entry 4940 (class 2620 OID 25755)
+-- TOC entry 4924 (class 2620 OID 25755)
 -- Name: chi_tiet_vat_tu trigger_trutonkhovattu; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1039,7 +1074,7 @@ CREATE TRIGGER trigger_trutonkhovattu BEFORE INSERT ON public.chi_tiet_vat_tu FO
 
 
 --
--- TOC entry 4929 (class 2606 OID 25669)
+-- TOC entry 4915 (class 2606 OID 25669)
 -- Name: chi_tiet_vat_tu chi_tiet_vat_tu_maketqua_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1048,7 +1083,7 @@ ALTER TABLE ONLY public.chi_tiet_vat_tu
 
 
 --
--- TOC entry 4930 (class 2606 OID 25674)
+-- TOC entry 4916 (class 2606 OID 25674)
 -- Name: chi_tiet_vat_tu chi_tiet_vat_tu_mavattu_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1057,16 +1092,7 @@ ALTER TABLE ONLY public.chi_tiet_vat_tu
 
 
 --
--- TOC entry 4932 (class 2606 OID 25710)
--- Name: danh_gia danh_gia_malichhen_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.danh_gia
-    ADD CONSTRAINT danh_gia_malichhen_fkey FOREIGN KEY (malichhen) REFERENCES public.lich_hen(malichhen);
-
-
---
--- TOC entry 4922 (class 2606 OID 25580)
+-- TOC entry 4912 (class 2606 OID 25580)
 -- Name: admin fk_admin_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1075,7 +1101,7 @@ ALTER TABLE ONLY public.admin
 
 
 --
--- TOC entry 4920 (class 2606 OID 25541)
+-- TOC entry 4910 (class 2606 OID 25541)
 -- Name: benh_nhan fk_bn_khachhang; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1084,7 +1110,7 @@ ALTER TABLE ONLY public.benh_nhan
 
 
 --
--- TOC entry 4919 (class 2606 OID 25527)
+-- TOC entry 4909 (class 2606 OID 25527)
 -- Name: khach_hang fk_kh_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1093,7 +1119,7 @@ ALTER TABLE ONLY public.khach_hang
 
 
 --
--- TOC entry 4925 (class 2606 OID 25623)
+-- TOC entry 4917 (class 2606 OID 26058)
 -- Name: lich_hen fk_lh_benhnhan; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1102,7 +1128,7 @@ ALTER TABLE ONLY public.lich_hen
 
 
 --
--- TOC entry 4926 (class 2606 OID 25628)
+-- TOC entry 4918 (class 2606 OID 26063)
 -- Name: lich_hen fk_lh_dichvu; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1111,7 +1137,7 @@ ALTER TABLE ONLY public.lich_hen
 
 
 --
--- TOC entry 4927 (class 2606 OID 25633)
+-- TOC entry 4919 (class 2606 OID 26068)
 -- Name: lich_hen fk_lh_nhanvien; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1120,7 +1146,7 @@ ALTER TABLE ONLY public.lich_hen
 
 
 --
--- TOC entry 4921 (class 2606 OID 25566)
+-- TOC entry 4911 (class 2606 OID 25566)
 -- Name: nhan_vien_y_te fk_nv_user; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1129,25 +1155,7 @@ ALTER TABLE ONLY public.nhan_vien_y_te
 
 
 --
--- TOC entry 4931 (class 2606 OID 25693)
--- Name: hoa_don hoa_don_malichhen_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.hoa_don
-    ADD CONSTRAINT hoa_don_malichhen_fkey FOREIGN KEY (malichhen) REFERENCES public.lich_hen(malichhen);
-
-
---
--- TOC entry 4928 (class 2606 OID 25649)
--- Name: ket_qua_kham ket_qua_kham_malichhen_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ket_qua_kham
-    ADD CONSTRAINT ket_qua_kham_malichhen_fkey FOREIGN KEY (malichhen) REFERENCES public.lich_hen(malichhen) ON DELETE CASCADE;
-
-
---
--- TOC entry 4923 (class 2606 OID 25600)
+-- TOC entry 4913 (class 2606 OID 25600)
 -- Name: nhan_vien_chuyen_khoa nhan_vien_chuyen_khoa_machuyenkhoa_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1156,7 +1164,7 @@ ALTER TABLE ONLY public.nhan_vien_chuyen_khoa
 
 
 --
--- TOC entry 4924 (class 2606 OID 25595)
+-- TOC entry 4914 (class 2606 OID 25595)
 -- Name: nhan_vien_chuyen_khoa nhan_vien_chuyen_khoa_manhanvien_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1164,11 +1172,11 @@ ALTER TABLE ONLY public.nhan_vien_chuyen_khoa
     ADD CONSTRAINT nhan_vien_chuyen_khoa_manhanvien_fkey FOREIGN KEY (manhanvien) REFERENCES public.nhan_vien_y_te(manhanvien) ON DELETE CASCADE;
 
 
--- Completed on 2026-05-19 12:59:20
+-- Completed on 2026-05-20 13:11:28
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ZdnqyoqxyJUGzP46IsGwnUPaU87VDUIt2KJSJ3AKzl7wHSrAUGUrMhq6P65ybYL
+\unrestrict lEO6aQOaS5fK1mfJvhfb5OqElrableDpoghxnMsdpot7BrP1ribbQS5K9QZ2nfM
 
